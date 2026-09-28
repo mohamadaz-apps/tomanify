@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Tomanify by A.Z",
+  "short_name": "Tomanify",
+  "version": "2.2.0",
+  "description": "Convert any price on the web to Iranian Toman in real time. Live rates from alanchand.com.",
+  "author": "Mohammad Alizade (A.Z)",
+  "homepage_url": "https://github.com/mohammad-alizade/tomanify",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Tomanify by A.Z",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "permissions": ["storage", "scripting", "activeTab"],
+  "host_permissions": [
+    "https://alanchand.com/*",
+    "https://cdn.jsdelivr.net/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["utils.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
