@@ -64,7 +64,7 @@ If you enjoy Tomanify, you can support development with USDT:
 ## Author
 
 **Mohammad Alizade (A.Z)**  
-GitHub: [@mohammad-alizade](https://github.com/mohamad-a-z)
+GitHub: [@Mohammad-Alizade](https://github.com/mohamadaz-apps)
 
 ---
 
@@ -76,7 +76,7 @@ MIT © Mohammad Alizade (A.Z)
 
 <br>
 
-# تومان‌فای (Tomanify) از A.Z
+# تومانیفای (Tomanify) از A.Z
 
 **تبدیل لحظه‌ای هر قیمت در وب به تومان ایران**
 
@@ -106,7 +106,7 @@ MIT © Mohammad Alizade (A.Z)
 
 ## نحوه کار
 
-تومان‌فای صفحه را برای الگوهای قیمت (نماد ارز + عدد) اسکن می‌کند، با نرخ زنده از alanchand.com تبدیل می‌کند و یک نشان کوچک کنار هر قیمت قرار می‌دهد.
+تومانیفای صفحه را برای الگوهای قیمت (نماد ارز + عدد) اسکن می‌کند، با نرخ زنده از alanchand.com تبدیل می‌کند و یک نشان کوچک کنار هر قیمت قرار می‌دهد.
 
 نرخ‌ها یک ساعت کش می‌شوند. اگر قدیمی‌تر شوند، در پاپ‌آپ **منقضی** نمایش داده می‌شود و در پس‌زمینه به‌روز می‌گردند.
 
@@ -124,7 +124,7 @@ MIT © Mohammad Alizade (A.Z)
 ## نویسنده
 
 **محمد علیزاده (A.Z)**  
-گیت‌هاب: [@mohammad-alizade](https://github.com/mohamad-a-z)
+گیت‌هاب: [@Mohammad-Alizade](https://github.com/mohamadaz-apps)
 
 ---
 
