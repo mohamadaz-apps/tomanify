@@ -1,3 +1,5 @@
+![Tomanify Preview](preview.png)
+
 # Tomanify by A.Z
 
 **Convert any price on the web to Iranian Toman in real time.**
