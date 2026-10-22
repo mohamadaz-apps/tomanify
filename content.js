@@ -1,6 +1,9 @@
 /**
  * Tomanify by A.Z
  * Content script — universal Toman price converter
+ * Price reading is done by Price Mind (price-mind.js): the number touching
+ * each currency symbol, with K/M/billion suffixes, instead of gluing every
+ * digit in the element together.
  *
  * Author: Mohammad Alizade (A.Z)
  * License: MIT
@@ -10,6 +13,10 @@
 (async function () {
   if (window !== window.top) return;
   if (location.protocol === 'chrome-extension:') return;
+  if (typeof PriceMind === 'undefined' || typeof PriceMind.readPrices !== 'function') {
+    console.warn('[Tomanify] Price Mind did not load');
+    return;
+  }
 
   // Skip sites that already show IRR/Toman
   const SKIP_HOSTS = /alanchand\.com|tgju\.org|bonbast\.com|irex\.ir|sanarate\.ir|navasan\.net|mazaneh\.net/i;
@@ -17,14 +24,21 @@
 
   console.log('[Tomanify] Active on:', location.hostname);
 
-  // Load Vazirmatn font once
-  if (!document.getElementById('vazirmatn-tomanify')) {
-    const l = document.createElement('link');
-    l.id = 'vazirmatn-tomanify';
-    l.rel = 'stylesheet';
-    l.href = 'https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css';
-    document.head.appendChild(l);
-  }
+  // The font bytes come from the extension process. Fetching the
+  // chrome-extension:// file from this page is what YouTube logs as
+  // "Unsafe attempt to load URL", even when the font still applies.
+  chrome.runtime.sendMessage({ type: 'GET_FONT' }, res => {
+    if (chrome.runtime.lastError || !res?.font) return;
+    try {
+      const bin = Uint8Array.from(atob(res.font), c => c.charCodeAt(0));
+      new FontFace('Vazirmatn', bin.buffer, { weight: '600', style: 'normal' })
+        .load()
+        .then(face => document.fonts.add(face))
+        .catch(err => console.warn('[Tomanify] Vazirmatn', err));
+    } catch (err) {
+      console.warn('[Tomanify] Vazirmatn', err);
+    }
+  });
 
   // ── Settings & rates ──────────────────────────────────────────────────────
   const DEFAULTS = {
@@ -60,70 +74,6 @@
     }
   });
 
-  // ── Currency detectors (longest symbols first) ────────────────────────────
-  const DETECTORS = [
-    { syms: ['KWD'], code: 'KWD' },
-    { syms: ['BHD'], code: 'BHD' },
-    { syms: ['OMR'], code: 'OMR' },
-    { syms: ['QAR'], code: 'QAR' },
-    { syms: ['SAR', 'SR'], code: 'SAR' },
-    { syms: ['AED'], code: 'AED' },
-    { syms: ['IQD'], code: 'IQD' },
-    { syms: ['AMD'], code: 'AMD' },
-    { syms: ['AFN', '؋'], code: 'AFN' },
-    { syms: ['NZD', 'NZ$'], code: 'NZD' },
-    { syms: ['HKD', 'HK$'], code: 'HKD' },
-    { syms: ['SGD', 'S$'], code: 'SGD' },
-    { syms: ['CAD', 'CA$', 'C$'], code: 'CAD' },
-    { syms: ['AUD', 'AU$', 'A$'], code: 'AUD' },
-    { syms: ['CHF', 'Fr.', 'SFr'], code: 'CHF' },
-    { syms: ['MYR', 'RM'], code: 'MYR' },
-    { syms: ['BRL', 'R$'], code: 'BRL' },
-    { syms: ['SEK'], code: 'SEK' },
-    { syms: ['NOK'], code: 'NOK' },
-    { syms: ['DKK'], code: 'DKK' },
-    { syms: ['TRY', '₺'], code: 'TRY' },
-    { syms: ['RUB', '₽'], code: 'RUB' },
-    { syms: ['GEL', '₾'], code: 'GEL' },
-    { syms: ['AZN', '₼'], code: 'AZN' },
-    { syms: ['CNY', 'RMB', 'CN¥'], code: 'CNY' },
-    { syms: ['JPY', 'JP¥'], code: 'JPY' },
-    { syms: ['KRW', '₩'], code: 'KRW' },
-    { syms: ['INR', '₹'], code: 'INR' },
-    { syms: ['PKR'], code: 'PKR' },
-    { syms: ['THB', '฿'], code: 'THB' },
-    { syms: ['GBP', '£'], code: 'GBP' },
-    { syms: ['EUR', '€'], code: 'EUR' },
-    { syms: ['USD', 'US$', '$'], code: 'USD' }, // $ last (most ambiguous)
-  ];
-
-  const SYM_LIST = [];
-  for (const d of DETECTORS) {
-    for (const s of d.syms) SYM_LIST.push({ sym: s, code: d.code });
-  }
-  SYM_LIST.sort((a, b) => b.sym.length - a.sym.length);
-
-  function detectCurrency(text) {
-    for (const { sym, code } of SYM_LIST) {
-      if (text.includes(sym)) return code;
-    }
-    return null;
-  }
-
-  // ── Conversion ────────────────────────────────────────────────────────────
-  // rates are already Toman per 1 foreign unit → just multiply
-  function toToman(amount, code) {
-    const rate = rates?.[code];
-    if (!rate) return null;
-    // Realistic range (KWD/BHD can be higher)
-    if (rate < 50 || rate > 10_000_000) {
-      console.warn('[Tomanify] Suspicious rate for', code, rate);
-      return null;
-    }
-    const t = Math.round(amount * rate);
-    return t > 0 ? t : null;
-  }
-
   // ── Badge styling & injection ─────────────────────────────────────────────
   function styleBadge(b) {
     b.style.fontSize     = cfg.badgeSize + 'px';
@@ -133,25 +83,61 @@
     b.style.display      = cfg.enabled ? 'inline-block' : 'none';
   }
 
+  function sourceText(node) {
+    const off = node.querySelector && node.querySelector('.a-offscreen');
+    if (off && off.textContent && off.textContent.trim()) return off.textContent.trim();
+    return (node.textContent || '').trim();
+  }
+
+  function labelFor(hits) {
+    const parts = [];
+    for (const hit of hits) {
+      const rate = rates?.[hit.code];
+      if (!rate || rate < 50 || rate > 10_000_000) continue;
+      const toman = PriceMind.tomanValue(hit.amount, rate);
+      if (!toman) continue;
+      parts.push({ hit, toman });
+    }
+    if (!parts.length) return null;
+    if (parts.length === 1) {
+      const only = parts[0];
+      return {
+        text: `≈ ${PriceMind.formatToman(only.toman, cfg.showToman)}`,
+        title: `${only.hit.raw} → ${only.toman.toLocaleString('en-US')} Toman`,
+      };
+    }
+    const text =
+      '≈ ' +
+      parts.map(p => `${p.hit.symbol} ${PriceMind.formatToman(p.toman, false)}`).join(' · ') +
+      (cfg.showToman ? ' تومان' : '');
+    const title = parts.map(p => `${p.hit.raw} → ${p.toman.toLocaleString('en-US')} Toman`).join(' | ');
+    return { text, title };
+  }
+
   function inject(node) {
     if (node.dataset.tomanifyDone || !rates || !cfg.enabled) return;
+    if (node.classList && node.classList.contains('tomanify-badge')) return;
 
-    const text = (node.textContent || '').trim();
-    if (text.length > 80) return;
+    const text = sourceText(node);
+    if (!text || text.length > 220) return;
 
-    const code = detectCurrency(text);
-    if (!code) return;
+    let hits;
+    try {
+      hits = PriceMind.readPrices(text).hits;
+    } catch (err) {
+      console.warn('[Tomanify] reader', err);
+      return;
+    }
+    if (!hits.length) return;
 
-    const amount = parseAmount(text); // from utils.js
-    if (!amount || amount > 100_000_000) return;
+    const built = labelFor(hits);
+    if (!built) return;
 
-    const toman = toToman(amount, code);
-    if (!toman) return;
-
-    const label = `≈ ${formatToman(toman, cfg.showToman)}`; // from utils.js
     const badge = document.createElement('span');
     badge.className = 'tomanify-badge';
-    badge.textContent = label;
+    badge.dataset.tomanifyDone = 'true';
+    badge.textContent = built.text;
+    badge.title = built.title;
     Object.assign(badge.style, {
       fontWeight: '600',
       borderRadius: '4px',
@@ -169,7 +155,7 @@
     styleBadge(badge);
     node.appendChild(badge);
     node.dataset.tomanifyDone = 'true';
-    console.log(`[Tomanify] ${code} ${amount} → ${label}`);
+    console.log(`[Tomanify] ${hits.map(h => h.code + ' ' + h.amount).join(', ')} → ${built.text}`);
   }
 
   // ── Scanning ──────────────────────────────────────────────────────────────
@@ -179,7 +165,6 @@
     /[$€£¥₹₺₽₩฿₾₼؋]|(?:^|\s|\()(?:USD|EUR|GBP|AED|CAD|AUD|CHF|NZD|HKD|SGD|MYR|BRL|TRY|RUB|GEL|AZN|CNY|JPY|KRW|INR|PKR|THB|SAR|OMR|QAR|KWD|BHD|IQD|AMD|AFN|NOK|SEK|DKK|NZ\$|HK\$|S\$|C\$|A\$|R\$|RM|SR|Fr)(?:\s|$|\))/;
 
   const AMAZON_SELS = [
-    '.a-price .a-offscreen',
     '.a-price',
     '.priceToPay',
     '.apexPriceToPay',
@@ -195,16 +180,18 @@
       AMAZON_SELS.forEach(sel =>
         document.querySelectorAll(`${sel}:not([data-tomanify-done])`).forEach(inject)
       );
-      return;
     }
 
-    // Universal TreeWalker – only short leaf text nodes with a currency marker
+    // Universal TreeWalker – short text with a currency marker.
+    // Price Mind decides which number belongs to that marker.
     const walker = document.createTreeWalker(
       document.body,
       NodeFilter.SHOW_ELEMENT,
       {
         acceptNode(el) {
           if (el.dataset?.tomanifyDone) return NodeFilter.FILTER_REJECT;
+          if (el.classList?.contains('tomanify-badge')) return NodeFilter.FILTER_REJECT;
+          if (el.classList?.contains('a-offscreen')) return NodeFilter.FILTER_REJECT;
           const tag = el.tagName;
           if (
             ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'HEAD', 'META', 'LINK', 'SVG', 'PATH'].includes(tag)
@@ -217,7 +204,7 @@
             .join('')
             .trim();
 
-          if (direct.length > 0 && direct.length < 80 && CURRENCY_RE.test(direct)) {
+          if (direct.length > 0 && direct.length < 220 && CURRENCY_RE.test(direct)) {
             return NodeFilter.FILTER_ACCEPT;
           }
           return NodeFilter.FILTER_SKIP;

@@ -189,7 +189,34 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch(() => sendResponse({ rates: FALLBACK_TOMAN, ok: false }));
     return true;
   }
+  if (msg.type === 'GET_FONT') {
+    // Fetched here, not from the page. A content-script fetch of
+    // chrome-extension:// is logged by YouTube as an unsafe load.
+    getFont()
+      .then(font => sendResponse({ font }))
+      .catch(() => sendResponse({ font: null }));
+    return true;
+  }
 });
+
+let fontB64 = null;
+function getFont() {
+  if (fontB64) return Promise.resolve(fontB64);
+  return fetch(chrome.runtime.getURL('fonts/Vazirmatn-SemiBold.woff2'))
+    .then(res => {
+      if (!res.ok) throw new Error('font ' + res.status);
+      return res.arrayBuffer();
+    })
+    .then(buf => {
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      }
+      fontB64 = btoa(binary);
+      return fontB64;
+    });
+}
 
 // Anonymous usage analytics (no personal data)
 function track(event) {
