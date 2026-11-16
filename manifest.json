@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Tomanify by A.Z",
   "short_name": "Tomanify",
-  "version": "2.3.4",
-  "description": "Convert any price on the web to Iranian Toman. Reads the number next to the currency, including K/M suffixes.",
+  "version": "3.4.2",
+  "description": "Shows the toman price beside foreign prices. Rates come from several Iranian sources, so one stale site does not stall the rest.",
   "author": "Mohammad Alizade (A.Z)",
   "homepage_url": "https://github.com/mohamadaz-apps/tomanify",
   "icons": {
@@ -13,15 +13,26 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Tomanify by A.Z",
+    "default_title": "تومانیفای",
     "default_icon": {
       "16": "icons/icon16.png",
-      "48": "icons/icon48.png"
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
-  "permissions": ["storage", "scripting", "activeTab"],
+  "permissions": ["storage", "alarms", "contextMenus", "notifications"],
+  "commands": {
+    "toggle-badges": {
+      "suggested_key": { "default": "Alt+Shift+T" },
+      "description": "Turn Tomanify badges on or off"
+    }
+  },
   "host_permissions": [
     "https://alanchand.com/*",
+    "https://arznab.com/*",
+    "https://nerkhara.com/*",
+    "https://call.tgju.org/*",
+    "https://raw.githubusercontent.com/*",
     "<all_urls>"
   ],
   "background": {
