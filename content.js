@@ -40,7 +40,7 @@
     }
   });
 
-  // ── Settings & rates ──────────────────────────────────────────────────────
+  // ── Settings & rates ──────────────────────────────────────────────────────────
   const DEFAULTS = {
     badgeSize: 11,
     textColor: '#1b6b3a',
@@ -48,7 +48,20 @@
     borderColor: '#b2dfc4',
     enabled: true,
     showToman: true,
+    excludedHosts: [],
+    overrides: {},
   };
+
+  function hostExcluded() {
+    const hosts = (cfg.excludedHosts || []).map(h => String(h).toLowerCase());
+    const here = location.hostname.toLowerCase().replace(/^www\./, '');
+    return hosts.some(h => here === h || here.endsWith('.' + h));
+  }
+
+  function clearBadges() {
+    document.querySelectorAll('.tomanify-badge').forEach(b => b.remove());
+    document.querySelectorAll('[data-tomanify-done]').forEach(el => delete el.dataset.tomanifyDone);
+  }
 
   let stored = await new Promise(r => chrome.storage.local.get(['rates', 'settings'], r));
   let rates  = stored.rates || null;
@@ -66,7 +79,13 @@
     if (area !== 'local') return;
     if (changes.settings) {
       cfg = { ...DEFAULTS, ...changes.settings.newValue };
+      if (hostExcluded() || !cfg.enabled) {
+        clearBadges();
+        return;
+      }
       document.querySelectorAll('.tomanify-badge').forEach(styleBadge);
+      clearBadges();
+      scan();
     }
     if (changes.rates) {
       rates = changes.rates.newValue;
@@ -74,7 +93,7 @@
     }
   });
 
-  // ── Badge styling & injection ─────────────────────────────────────────────
+  // ── Badge styling & injection ──────────────────────────────────────────────
   function styleBadge(b) {
     b.style.fontSize     = cfg.badgeSize + 'px';
     b.style.color        = cfg.textColor;
@@ -92,7 +111,8 @@
   function labelFor(hits) {
     const parts = [];
     for (const hit of hits) {
-      const rate = rates?.[hit.code];
+      const override = cfg.overrides && Number(cfg.overrides[hit.code]);
+      const rate = (Number.isFinite(override) && override > 0) ? override : rates?.[hit.code];
       if (!rate || rate < 50 || rate > 10_000_000) continue;
       const toman = PriceMind.tomanValue(hit.amount, rate);
       if (!toman) continue;
@@ -120,6 +140,8 @@
 
     const text = sourceText(node);
     if (!text || text.length > 220) return;
+    if (/تومان|تومن|ریال/.test(text)) return;
+    if (hostExcluded()) return;
 
     let hits;
     try {
@@ -158,11 +180,11 @@
     console.log(`[Tomanify] ${hits.map(h => h.code + ' ' + h.amount).join(', ')} → ${built.text}`);
   }
 
-  // ── Scanning ──────────────────────────────────────────────────────────────
+  // ── Scanning ──────────────────────────────────────────────────────────────────
   const isAmazon = /amazon\./i.test(location.hostname);
 
   const CURRENCY_RE =
-    /[$€£¥₹₺₽₩฿₾₼؋]|(?:^|\s|\()(?:USD|EUR|GBP|AED|CAD|AUD|CHF|NZD|HKD|SGD|MYR|BRL|TRY|RUB|GEL|AZN|CNY|JPY|KRW|INR|PKR|THB|SAR|OMR|QAR|KWD|BHD|IQD|AMD|AFN|NOK|SEK|DKK|NZ\$|HK\$|S\$|C\$|A\$|R\$|RM|SR|Fr)(?:\s|$|\))/;
+    /[$\u20ac\u00a3\u00a5\u20b9\u20ba\u20bd\u20a9\u0e3f\u20be\u20bc\u060b]|(?:^|\s|\()(?:USD|EUR|GBP|AED|CAD|AUD|CHF|NZD|HKD|SGD|MYR|BRL|TRY|RUB|GEL|AZN|CNY|JPY|KRW|INR|PKR|THB|SAR|OMR|QAR|KWD|BHD|IQD|AMD|AFN|NOK|SEK|DKK|NZ\$|HK\$|S\$|C\$|A\$|R\$|RM|SR|Fr)(?:\s|$|\))/;
 
   const AMAZON_SELS = [
     '.a-price',
@@ -174,7 +196,7 @@
   ];
 
   function scan() {
-    if (!rates) return;
+    if (!rates || hostExcluded() || !cfg.enabled) return;
 
     if (isAmazon) {
       AMAZON_SELS.forEach(sel =>
